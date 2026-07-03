@@ -1,0 +1,50 @@
+[project]
+name = "domain-deep-agent"
+version = "1.0.0"
+description = "Golden-path template: a domain deep agent service (async research, deterministic execute) behind FastAPI + arq."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+
+# ── Version pins ────────────────────────────────────────────────────────────
+# This is a regulated environment: pins are EXACT. The agent-harness pins
+# (deepagents / langchain / langgraph) were resolved together and must only be
+# bumped together — see BLUEPRINT.md §"Harness swappability" and ADR-0006.
+dependencies = [
+    "fastapi==0.139.0",
+    "uvicorn[standard]==0.49.0",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.14.2",
+    "redis[hiredis]==5.3.1",  # arq 0.28.0 requires redis<6
+    "arq==0.28.0",
+    "httpx==0.28.1",
+    "cryptography==49.0.0",
+    # Azure: Entra ID auth for the LLM, Key Vault for PAT envelope encryption
+    "azure-identity==1.25.3",
+    "azure-keyvault-keys==4.11.1",
+    # Agent harness (pinned as a set — bump together, never individually)
+    "deepagents==0.6.12",
+    "langchain==1.3.11",
+    "langgraph==1.2.7",
+    "langchain-openai==1.3.3",
+    "langchain-mcp-adapters==0.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.4.2",
+    "pytest-asyncio==1.4.0",
+    "fakeredis==2.36.2",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
