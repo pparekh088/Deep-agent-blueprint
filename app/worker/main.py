@@ -26,7 +26,7 @@ from redis.asyncio import Redis
 from app.adapters import build_adapter
 from app.agent.factory import get_agent_factory
 from app.config import get_settings
-from app.llm.azure import build_llm
+from app.llm.azure import build_fast_llm, build_llm
 from app.observability.logging import configure_logging, log_event
 from app.state.redis_store import RedisStore
 from app.state.token_vault import build_token_vault
@@ -48,6 +48,7 @@ async def startup(ctx: dict[str, Any]) -> None:
         adapter=build_adapter(_settings),
         agent_factory=get_agent_factory(_settings.agent_factory),
         build_llm=build_llm,
+        build_fast_llm=build_fast_llm,
     )
     log_event(logger, "worker_started", message=f"domain={_settings.domain}")
 

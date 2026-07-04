@@ -9,4 +9,4 @@ CONTRIBUTING.md (Definition of Done).
 
 # Bump on every template release. Each domain repo records the version it was
 # cut from so core fixes can be back-ported deliberately (see README.md).
-TEMPLATE_VERSION = "1.0.0"
+TEMPLATE_VERSION = "1.1.0"

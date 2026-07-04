@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     job_max_attempts: int = 2       # research is read-only → safe to re-run
     estimated_wait_s: int = 5       # advertised in the 202 response
 
+    # Per-run cap on concurrent downstream READ calls. Parallel fan-out is
+    # encouraged (agent prompt) and this cap keeps it from stampeding a
+    # rate-limited target — every 429 costs a backoff sleep that is slower
+    # than briefly queueing here. 0 disables the cap.
+    max_concurrent_reads: int = 6
+
     # ── Agent harness ───────────────────────────────────────────────────────
     # Registered factory name (app/agent/factory.py). Swapping the harness is
     # a config change + factory registration — never an API contract change.
@@ -46,6 +52,10 @@ class Settings(BaseSettings):
     # ── Azure OpenAI (Entra ID auth — no API keys) ──────────────────────────
     azure_openai_endpoint: str = ""
     azure_openai_deployment: str = ""
+    # Optional cheaper/faster deployment for retrieval sub-agents (model
+    # tiering). Empty = single-model behavior: planning, retrieval, and
+    # synthesis all run on azure_openai_deployment.
+    azure_openai_fast_deployment: str = ""
     azure_openai_api_version: str = "2024-10-21"
 
     # ── PAT envelope encryption (USER_PAT domains only) ─────────────────────

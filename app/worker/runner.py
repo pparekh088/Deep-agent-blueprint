@@ -12,6 +12,8 @@ testable and the queue swappable.
 from __future__ import annotations
 
 import asyncio
+import functools
+import inspect
 import json
 import logging
 import re
@@ -56,6 +58,9 @@ class WorkerDeps:
     adapter: DomainAdapter
     agent_factory: AgentFactory
     build_llm: Callable[[Settings], Any]
+    # Optional fast tier for retrieval sub-agents (model tiering). None =
+    # single-model behavior.
+    build_fast_llm: Callable[[Settings], Any] | None = None
 
 
 class JobCancelled(Exception):
@@ -91,8 +96,14 @@ async def run_research_job(deps: WorkerDeps, job_id: str, attempt: int) -> None:
             credentials = await _resolve_job_credentials(deps, record)
             agent = deps.agent_factory(
                 model=deps.build_llm(deps.settings),
-                tools=deps.adapter.read_tools(credentials),
+                tools=cap_read_concurrency(
+                    deps.adapter.read_tools(credentials),
+                    deps.settings.max_concurrent_reads,
+                ),
                 instructions=render_research_prompt(deps.adapter),
+                fast_model=(
+                    deps.build_fast_llm(deps.settings) if deps.build_fast_llm else None
+                ),
             )
             async with asyncio.timeout(deps.settings.job_timeout_s):
                 final_text = await _stream_agent(deps, job_id, agent, record)
@@ -150,6 +161,35 @@ async def run_research_job(deps: WorkerDeps, job_id: str, attempt: int) -> None:
                 ),
             )
             logger.error("job failed", exc_info=exc, extra={"event": "job_failed", "status": "failed"})
+
+
+def cap_read_concurrency(
+    tools: list[Callable[..., Any]], limit: int
+) -> list[Callable[..., Any]]:
+    """Wrap the run's read tools in one shared semaphore so a single research
+    run never issues more than ``limit`` concurrent downstream calls.
+
+    Parallel fan-out is encouraged (see prompts.py) — this cap is what makes
+    it safe to encourage: uncapped fan-out trips downstream 429s, and every
+    429 costs a backoff sleep that is slower than briefly queueing here.
+    ``functools.wraps`` preserves each tool's name/docstring/signature, which
+    the harness uses to build the tool schema."""
+    if limit <= 0:
+        return list(tools)
+    semaphore = asyncio.Semaphore(limit)
+
+    def wrap(tool: Callable[..., Any]) -> Callable[..., Any]:
+        if not inspect.iscoroutinefunction(tool):
+            return tool  # sync callables can't over-fan-out the event loop
+
+        @functools.wraps(tool)
+        async def capped_tool(*args: Any, **kwargs: Any) -> Any:
+            async with semaphore:
+                return await tool(*args, **kwargs)
+
+        return capped_tool
+
+    return [wrap(tool) for tool in tools]
 
 
 async def _resolve_job_credentials(deps: WorkerDeps, record: JobRecord):

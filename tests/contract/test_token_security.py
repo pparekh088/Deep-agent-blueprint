@@ -70,7 +70,7 @@ async def test_pat_and_api_keys_redacted_from_all_log_lines(env, pat):
 
 async def test_pat_redacted_even_in_exception_paths(env, pat):
     class LeakyAgentFactory:
-        def __call__(self, *, model, tools, instructions):
+        def __call__(self, *, model, tools, instructions, fast_model=None):
             raise RuntimeError(f"downstream rejected token {pat}")
 
     job_id = (await env.submit()).json()["job_id"]

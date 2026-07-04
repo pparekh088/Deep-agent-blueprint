@@ -5,7 +5,7 @@ domain agent (Jira, Confluence, Email, web search, and whatever comes next)
 is an instantiation of this template. Read this once end to end before you
 build your first domain; come back to the tables when you're mid-build.
 
-TEMPLATE_VERSION **1.0.0** · audience: developers of mixed seniority ·
+TEMPLATE_VERSION **1.1.0** · audience: developers of mixed seniority ·
 companion docs: `README.md` (quickstart), `CONTRIBUTING.md` (Definition of
 Done), `docs/adr/` (why the non-obvious decisions are what they are).
 
@@ -489,7 +489,7 @@ index=agents event=token_staged OR event=token_purged | stats count by event, jo
 | Agent exceeds time budget | `asyncio.timeout` → `failed: JOB_TIMEOUT`; token purged | bounded worst-case cost per job; consumer sees a typed error |
 | Redis unavailable | API: 503s (health reports degraded, readiness gates traffic); worker: stalls, no work lost — queue is durable in Redis persistence | jobs are either fully staged or rejected; no half-state |
 | Key Vault unavailable | **fail closed**: `POST /research` → `503 DEPENDENCY_UNAVAILABLE` for USER_PAT domains; running jobs that can't unwrap fail | never store the PAT in a weaker form to "keep availability" |
-| Downstream 429/5xx during research | exponential backoff in read tools (honors `Retry-After`) | reads are idempotent; backoff caps per call |
+| Downstream 429/5xx during research | exponential backoff in read tools (honors `Retry-After`); per-run concurrency cap (§9.1) prevents self-inflicted 429 storms from parallel fan-out | reads are idempotent; backoff caps per call |
 | Downstream failure during execute | `502 DOWNSTREAM_ERROR`, **no auto-retry**; consumer replays with the same `Idempotency-Key` | replaying a mutation without an idempotency record risks double-execution |
 | Queue backlog grows | `zcard(arq:queue)` exposed via `/health` and metrics → **KEDA scales worker replicas on queue length** | API tier keeps accepting (bounded by Redis), consumers see honest `estimated_wait_s` |
 | Consumer retries submit (network flake) | new job_id each time — submits are not idempotent by design; consumer dedupes on its side | research is read-only; a duplicate run wastes tokens, mutates nothing |
@@ -533,6 +533,33 @@ tools: research binds **read-only MCP tools only**.
 LLM: `AzureChatOpenAI` with **Entra ID auth** (`DefaultAzureCredential` +
 bearer token provider) — no API keys anywhere in the LLM path
 (`app/llm/azure.py`).
+
+### 9.1 Performance seams: parallel retrieval and model tiering
+
+Two template-core mechanisms cut research latency without touching quality
+(mutation quality is floor-guaranteed anyway: `/execute` re-validates schema
+and live preconditions regardless of how research ran):
+
+**Parallel retrieval, capped.** The research prompt explicitly instructs the
+agent to issue independent lookups concurrently (multiple tool calls per
+turn, parallel retriever sub-tasks) instead of serially. What makes that
+safe to *encourage* is the per-run concurrency cap: the runner wraps every
+read tool in one shared `asyncio.Semaphore(MAX_CONCURRENT_READS)` (default
+6, `0` disables) before binding them to the agent
+(`app/worker/runner.py:cap_read_concurrency`). Uncapped fan-out trips
+downstream 429s, and every 429 costs a backoff sleep that is slower than
+briefly queueing at the semaphore. The wrapper preserves each tool's
+name/docstring/signature (the harness builds tool schemas from them) — the
+contract suite asserts the wrapper is invisible.
+
+**Model tiering.** Configure `AZURE_OPENAI_FAST_DEPLOYMENT` and the deep
+agent gains a `retriever` sub-agent on the fast/cheap tier: the main agent
+(primary deployment) keeps planning, cross-source synthesis, and action
+proposals — where quality actually lives — and delegates retrieval +
+per-source summarization, which is mostly extraction. Unset = single-model,
+exactly the previous behavior. The fast model flows through the same factory
+seam (`fast_model` parameter), so custom harnesses may use or ignore it —
+the registered `react` factory ignores it by design.
 
 ---
 
