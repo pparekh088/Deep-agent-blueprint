@@ -50,6 +50,8 @@ def test_prompt_renders_action_catalog_from_adapter():
     assert "`update_issue`" in jira_prompt
     assert "`add_comment`" in jira_prompt
     assert "issue_key" in jira_prompt
+    # Parallel retrieval is promoted, not left to model defaults.
+    assert "concurrently" in jira_prompt
 
     search_prompt = render_research_prompt(WebSearchAdapter(api_key="k" * 10))
     assert "research-only" in search_prompt

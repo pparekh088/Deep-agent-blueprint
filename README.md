@@ -1,6 +1,6 @@
 # Domain Deep Agent Service — golden-path template
 
-**TEMPLATE_VERSION: 1.0.0** (also in `app/__init__.py`; record the version
+**TEMPLATE_VERSION: 1.1.0** (also in `app/__init__.py`; record the version
 your domain repo was cut from in the table below)
 
 One deployable per domain (Jira, Confluence, Email, web search, …) that wraps
@@ -104,5 +104,12 @@ BLUEPRINT.md    the architecture standard (start here)
 
 | Domain | Repo | TEMPLATE_VERSION |
 |---|---|---|
-| jira (reference) | this repo | 1.0.0 |
-| websearch (reference) | this repo | 1.0.0 |
+| jira (reference) | this repo | 1.1.0 |
+| websearch (reference) | this repo | 1.1.0 |
+
+## Template changelog
+
+| Version | Change |
+|---|---|
+| 1.1.0 | Performance seams (BLUEPRINT §9.1): parallel retrieval promoted in the research prompt with a per-run `MAX_CONCURRENT_READS` semaphore; optional model tiering via `AZURE_OPENAI_FAST_DEPLOYMENT` (fast retriever sub-agent, primary model keeps planning/synthesis/proposals). Agent factories now take an optional `fast_model` kwarg. |
+| 1.0.0 | Initial template. |

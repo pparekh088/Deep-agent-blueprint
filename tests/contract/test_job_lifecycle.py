@@ -95,7 +95,7 @@ async def test_cancel_mid_run_aborts_between_agent_steps(env):
 
     factory_calls = []
 
-    def factory(*, model, tools, instructions):
+    def factory(*, model, tools, instructions, fast_model=None):
         factory_calls.append(1)
         return FakeAgent('{"summary": "should never persist"}', on_step=cancel_now)
 

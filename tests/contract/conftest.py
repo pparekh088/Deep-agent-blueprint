@@ -164,9 +164,16 @@ class Env:
     def agent_factory_with(self, **agent_kwargs: Any) -> Callable[..., FakeAgent]:
         final_text = json.dumps(self.case.agent_output)
 
-        def factory(*, model: Any, tools: list[Any], instructions: str) -> FakeAgent:
+        def factory(
+            *, model: Any, tools: list[Any], instructions: str, fast_model: Any | None = None
+        ) -> FakeAgent:
             self.captured_factory_calls.append(
-                {"tools": tools, "instructions": instructions, "model": model}
+                {
+                    "tools": tools,
+                    "instructions": instructions,
+                    "model": model,
+                    "fast_model": fast_model,
+                }
             )
             return FakeAgent(final_text, **agent_kwargs)
 
